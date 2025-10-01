@@ -19,6 +19,7 @@ import java.lang.ref.WeakReference
 import java.awt.Component
 import com.intellij.util.Alarm
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.wm.ToolWindow
 import javax.swing.JList
 import javax.swing.ListCellRenderer
 import com.intellij.ui.SimpleColoredComponent
@@ -39,7 +40,9 @@ class DebugSessionListener(private val project: Project) : Disposable {
     // Prevent concurrent updates
     @Volatile
     private var isUpdating = false
-
+    @Volatile
+    private var retryCount = 0
+    private val maxRetries = 10
     // Use Alarm for proper EDT scheduling instead of sleep
     private val updateAlarm = Alarm(Alarm.ThreadToUse.SWING_THREAD, this)
     private val updateDelayMs = 10
@@ -99,6 +102,7 @@ class DebugSessionListener(private val project: Project) : Disposable {
                 // Clear cache on pause - frames list is rebuilt
                 framesComponentRef = null
                 originalRenderer = null
+                retryCount = 0
                 // Schedule update with delay to let UI render
                 scheduleUpdate(updateDelayMs)
             }
@@ -115,6 +119,7 @@ class DebugSessionListener(private val project: Project) : Disposable {
                 logger.warn("Settings changed")
                 framesComponentRef = null
                 originalRenderer = null
+                retryCount = 0
                 scheduleUpdate(updateDelayMs)
             }
 
@@ -122,6 +127,7 @@ class DebugSessionListener(private val project: Project) : Disposable {
                 logger.warn("Session resumed")
                 framesComponentRef = null
                 originalRenderer = null
+                retryCount = 0
             }
 
             override fun sessionStopped() {
@@ -129,6 +135,7 @@ class DebugSessionListener(private val project: Project) : Disposable {
                 framesComponentRef = null
                 originalRenderer = null
                 currentSession = null
+                retryCount = 0
             }
         })
     }
@@ -146,6 +153,7 @@ class DebugSessionListener(private val project: Project) : Disposable {
                 // Clear cache when switching tabs - component changes
                 framesComponentRef = null
                 originalRenderer = null
+                retryCount = 0
                 scheduleUpdate(updateDelayMs)
             }
         }
@@ -184,7 +192,23 @@ class DebugSessionListener(private val project: Project) : Disposable {
         // Clear cache to force fresh lookup
         framesComponentRef = null
         originalRenderer = null
+        retryCount = 0
         scheduleUpdate(0)
+    }
+
+    private fun getToolWindow(): ToolWindow? {
+        val servicesToolWindow = ToolWindowManager.getInstance(project).getToolWindow(ToolWindowId.SERVICES)
+        val debugToolWindow = ToolWindowManager.getInstance(project).getToolWindow(ToolWindowId.DEBUG)
+
+        val toolWindow = when {
+            servicesToolWindow?.isVisible == true -> servicesToolWindow
+            debugToolWindow?.isVisible == true -> debugToolWindow
+            else -> {
+                logger.warn("Neither Debug nor Services tool window is available")
+                return null
+            }
+        }
+        return toolWindow
     }
 
     /**
@@ -204,23 +228,20 @@ class DebugSessionListener(private val project: Project) : Disposable {
         try {
             isUpdating = true
 
+            val activeSession = XDebuggerManager.getInstance(project).currentSession
+            if (activeSession == null) {
+                logger.warn("No active debug session")
+                retryCount = 0  // Reset on no session
+                return
+            }
+            currentSession = activeSession
+
             if (!settings.isHideLibraryFrames) {
                 logger.warn("Hiding disabled")
                 return
             }
-
             // Try DEBUG tool window first, then SERVICES tool window
-            val debugToolWindow = ToolWindowManager.getInstance(project).getToolWindow(ToolWindowId.DEBUG)
-            val servicesToolWindow = ToolWindowManager.getInstance(project).getToolWindow(ToolWindowId.SERVICES)
-
-            val toolWindow = when {
-                debugToolWindow?.isAvailable == true -> debugToolWindow
-                servicesToolWindow?.isAvailable == true -> servicesToolWindow
-                else -> {
-                    logger.warn("Neither Debug nor Services tool window is available")
-                    return
-                }
-            }
+            val toolWindow: ToolWindow = getToolWindow() ?: return
 
             val content = toolWindow.contentManager.selectedContent
             if (content == null) {
@@ -234,6 +255,7 @@ class DebugSessionListener(private val project: Project) : Disposable {
                 logger.warn("Attempting to use cached component")
                 if (updateFramesComponent(cachedComponent)) {
                     logger.warn("Successfully updated cached component")
+                    retryCount = 0  // Reset on success
                     return
                 } else {
                     logger.warn("Cached component update failed, clearing cache")
@@ -244,6 +266,13 @@ class DebugSessionListener(private val project: Project) : Disposable {
 
             // Find and update component
             if (!findAndUpdateFramesComponent(content.component)) {
+                if (retryCount >= maxRetries) {
+                    logger.warn("Max retries ($maxRetries) reached, giving up")
+                    retryCount = 0
+                    return
+                }
+
+                retryCount++
                 logger.warn("Could not find frames component, will retry")
                 // Schedule retry if component not ready yet
                 scheduleUpdate(updateDelayMs)
