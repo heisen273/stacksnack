@@ -6,17 +6,11 @@
     <description><![CDATA[
     <h2>StackSnack</h2>
     <p>
-        <b>StackSnack</b> helps you cut through the noise in your debugger by hiding
-        library stack frames. This keeps your focus on <i>your</i> code, making
-        debugging sessions faster and easier to digest.
+        <b>StackSnack</b> helps you cut through the noise in your debugger by hiding library stack frames.
     </p>
-
-    <h3>Why use it?</h3>
-    <ul>
-        <li>Quickly hide clutter from library/framework stack frames</li>
-        <li>Stay focused on your own code paths</li>
-        <li>Works seamlessly across JetBrains IDEs (PyCharm, GoLand, WebStorm, etc.)</li>
-    </ul>
+    <p>
+    This keeps your focus on <i>your</i> code, making debugging sessions faster and easier to digest.
+    </p>
 
     <h3>Usage</h3>
     <p>
@@ -31,18 +25,22 @@
         </ol>
         <img src="https://raw.githubusercontent.com/heisen273/IntelliJ-Library-Stack-Frame-Hider/refs/heads/main/assets/usage.gif" alt="Adding button demo"/>
     </p>
+
+    <h3>Why use it?</h3>
+    <ul>
+        <li>Quickly hide clutter from library/framework stack frames</li>
+        <li>Stay focused on your own code paths</li>
+        <li>Works seamlessly across JetBrains IDEs (PyCharm, GoLand, WebStorm, etc.)</li>
+    </ul>
+
     ]]></description>
 
 
     <change-notes><![CDATA[
-        <h3>1.0.8</h3>
         <ul>
-            <li>Main release</li>
+            <li>Minor update</li>
         </ul>
     ]]></change-notes>
-
-    <!-- Compatible with IntelliJ Platform 2021.2 and later -->
-    <idea-version since-build="212" until-build="252.*"/>
 
     <!-- Plugin dependencies -->
     <depends>com.intellij.modules.platform</depends>

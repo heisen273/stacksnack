@@ -1,11 +1,16 @@
+// Compatible with IntelliJ Platform 2022.2 and later
+tasks.patchPluginXml {
+    sinceBuild.set("222")
+    untilBuild.set("252.*")
+}
+group = "com.stackframehider"
+version = "1.0.91"
+
 plugins {
     id("org.jetbrains.intellij") version "1.17.3"
     kotlin("jvm") version "1.9.24"
     java
 }
-
-group = "com.stackframehider"
-version = "1.0.8"
 
 repositories {
     mavenCentral()
@@ -50,9 +55,4 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
 tasks.withType<JavaCompile> {
     sourceCompatibility = "17"
     targetCompatibility = "17"
-}
-
-tasks.patchPluginXml {
-    sinceBuild.set("231")
-    untilBuild.set("252.*")
 }
