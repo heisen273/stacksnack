@@ -22,6 +22,7 @@ import com.intellij.openapi.wm.ToolWindow
 import javax.swing.JList
 import javax.swing.ListCellRenderer
 import com.intellij.ui.SimpleColoredComponent
+import javax.swing.UIManager
 
 
 @Service(Service.Level.PROJECT)
@@ -34,6 +35,7 @@ class DebugSessionListener(private val project: Project) : Disposable {
     private var framesComponentRef: WeakReference<JBList<*>>? = null
     private var currentSession: XDebugSession? = null
     private var originalRenderer: ListCellRenderer<Any?>? = null
+    private var referenceLibraryFrame: XStackFrame? = null
 
     // Prevent concurrent updates
     @Volatile
@@ -59,9 +61,8 @@ class DebugSessionListener(private val project: Project) : Disposable {
         messageBusConnection?.subscribe(
             ToolWindowManagerListener.TOPIC,
             object : ToolWindowManagerListener {
-                override fun stateChanged(toolWindowManager: ToolWindowManager) {
-                    val debugWindow = toolWindowManager.getToolWindow(ToolWindowId.DEBUG)
-                    if (debugWindow?.isVisible == true && settings.isHideLibraryFrames) {
+                override fun toolWindowShown(toolWindow: ToolWindow) {
+                    if (toolWindow.id == ToolWindowId.DEBUG && settings.isHideLibraryFrames) {
                         // Try to apply filtering when debug window becomes visible
                         scheduleUpdate(updateDelayMs)
                     }
@@ -292,7 +293,6 @@ class DebugSessionListener(private val project: Project) : Disposable {
         if (originalRenderer == null) {
             originalRenderer = component.cellRenderer as? ListCellRenderer<Any?>
         }
-
         val origRenderer = originalRenderer ?: return
 
         component.cellRenderer = object : ListCellRenderer<Any?> {
@@ -302,11 +302,13 @@ class DebugSessionListener(private val project: Project) : Disposable {
                 index: Int,
                 isSelected: Boolean,
                 cellHasFocus: Boolean
-            ): Component? {
+            ): Component {
 
-                if (isSelected){
-                    currentFramePosition = index
-                }
+                // this doesn't work as expected - index won't match after filtering.
+                // Need to restore selection differently
+//                if (isSelected){
+//                    currentFramePosition = index
+//                }
 
                 // For regular frames, use original renderer
                 if (value !is HiddenStackFrame) {
@@ -316,11 +318,11 @@ class DebugSessionListener(private val project: Project) : Disposable {
                 }
 
                 // For hidden frames, render with consistent styling
+
                 val comp = SimpleColoredComponent()
 
                 // Use slightly lighter gray for text when selected for contrast
                 val textColor = if (isSelected) Color(140, 140, 140) else Color(120, 120, 120)
-
                 comp.append(
                     value.getText(),
                     com.intellij.ui.SimpleTextAttributes(
@@ -328,17 +330,18 @@ class DebugSessionListener(private val project: Project) : Disposable {
                         textColor
                     )
                 )
-
-                // Use system selection color when selected
+                // Set colors
                 comp.background = if (isSelected) {
-                    javax.swing.UIManager.getColor("List.selectionBackground") ?: Color(75, 110, 175)
+                    UIManager.getColor("List.selectionBackground") ?: list.selectionBackground
                 } else {
-                    list.background
+                    UIManager.getColor("FileColor.Yellow")
                 }
+                comp.foreground = UIManager.getColor("List.selectionForeground") ?: list.selectionForeground
+
                 comp.isOpaque = true
 
                 // Slightly smaller font
-                comp.font = list.font?.deriveFont(list.font.size * 0.92f)
+                comp.font = list.font?.deriveFont(list.font.size * 0.98f)
 
                 return comp
             }
@@ -371,6 +374,7 @@ class DebugSessionListener(private val project: Project) : Disposable {
                 }
 
                 if (!filter.isProjectFrame(item, project)) {
+                    referenceLibraryFrame = item
                     nonProjectFrameCount++
                     continue
                 }
