@@ -4,13 +4,14 @@
     <vendor url="https://github.com/heisen273/IntelliJ-Library-Stack-Frame-Hider/tree/main">Library Stack Frame Hider</vendor>
 
     <description><![CDATA[
-    <h2>StackSnack – 隐藏库中的帧</h2>
+    <h2>StackSnack</h2>
     <p>
         <b>StackSnack</b> helps you cut through the noise in your debugger by hiding library stack frames.
     </p>
     <p>
     This keeps your focus on <i>your</i> code, making debugging sessions faster and easier to digest.
     </p>
+    <h3>隐藏库中的帧</h3>
     <p>这款插件可以在调试器中<b>隐藏第三方库的堆栈帧</b>，让你更专注于自己的代码逻辑。</p>
 
     <h3>Usage</h3>
