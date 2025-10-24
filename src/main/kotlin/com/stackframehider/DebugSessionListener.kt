@@ -5,7 +5,6 @@ import com.intellij.util.messages.MessageBusConnection
 import com.intellij.xdebugger.*
 import com.intellij.openapi.diagnostic.Logger
 import java.awt.Color
-import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.xdebugger.frame.XStackFrame
 import com.intellij.openapi.wm.ToolWindowManager
@@ -23,7 +22,6 @@ import com.intellij.openapi.wm.ToolWindow
 import javax.swing.JList
 import javax.swing.ListCellRenderer
 import com.intellij.ui.SimpleColoredComponent
-import java.awt.Font
 
 
 @Service(Service.Level.PROJECT)
@@ -46,6 +44,8 @@ class DebugSessionListener(private val project: Project) : Disposable {
     // Use Alarm for proper EDT scheduling instead of sleep
     private val updateAlarm = Alarm(Alarm.ThreadToUse.SWING_THREAD, this)
     private val updateDelayMs = 10
+
+    private var currentFramePosition = 0
 
     private var contentManagerListener: ContentManagerListener? = null
 
@@ -302,40 +302,45 @@ class DebugSessionListener(private val project: Project) : Disposable {
                 index: Int,
                 isSelected: Boolean,
                 cellHasFocus: Boolean
-            ): Component {
-                // For hidden frames, render with consistent styling
-                if (value is HiddenStackFrame) {
-                    val comp = SimpleColoredComponent()
+            ): Component? {
 
-                    // Use slightly lighter gray for text when selected for contrast
-                    val textColor = if (isSelected) Color(140, 140, 140) else Color(120, 120, 120)
-
-                    comp.append(
-                        value.getText(),
-                        com.intellij.ui.SimpleTextAttributes(
-                            com.intellij.ui.SimpleTextAttributes.STYLE_PLAIN,
-                            textColor
-                        )
-                    )
-
-                    // Use system selection color when selected
-                    comp.background = if (isSelected) {
-                        javax.swing.UIManager.getColor("List.selectionBackground") ?: Color(75, 110, 175)
-                    } else {
-                        list.background
-                    }
-                    comp.isOpaque = true
-
-                    // Slightly smaller font
-                    comp.font = list.font?.deriveFont(list.font.size * 0.92f)
-
-                    return comp
+                if (isSelected){
+                    currentFramePosition = index
                 }
 
                 // For regular frames, use original renderer
-                return origRenderer.getListCellRendererComponent(
-                    list, value, index, isSelected, cellHasFocus
+                if (value !is HiddenStackFrame) {
+                    return origRenderer.getListCellRendererComponent(
+                        list, value, index, isSelected, cellHasFocus
+                    )
+                }
+
+                // For hidden frames, render with consistent styling
+                val comp = SimpleColoredComponent()
+
+                // Use slightly lighter gray for text when selected for contrast
+                val textColor = if (isSelected) Color(140, 140, 140) else Color(120, 120, 120)
+
+                comp.append(
+                    value.getText(),
+                    com.intellij.ui.SimpleTextAttributes(
+                        com.intellij.ui.SimpleTextAttributes.STYLE_PLAIN,
+                        textColor
+                    )
                 )
+
+                // Use system selection color when selected
+                comp.background = if (isSelected) {
+                    javax.swing.UIManager.getColor("List.selectionBackground") ?: Color(75, 110, 175)
+                } else {
+                    list.background
+                }
+                comp.isOpaque = true
+
+                // Slightly smaller font
+                comp.font = list.font?.deriveFont(list.font.size * 0.92f)
+
+                return comp
             }
         }
     }
@@ -410,13 +415,13 @@ class DebugSessionListener(private val project: Project) : Disposable {
     }
 
     private fun restoreSelection(component: JBList<*>, projectFrames: List<XStackFrame>) {
-        val currentFrame = currentSession?.currentStackFrame ?: return
-        val index = projectFrames.indexOfFirst { it == currentFrame }
+//        val currentFrame = currentSession?.currentStackFrame ?: return
+//        val index = projectFrames.indexOfFirst { it == currentFrame }
 
-        if (index >= 0) {
-            component.selectedIndex = index
-            component.ensureIndexIsVisible(index)
-        }
+//        if (index >= 0) {
+        component.selectedIndex = currentFramePosition
+        component.ensureIndexIsVisible(currentFramePosition)
+//        }
     }
 
     /**
