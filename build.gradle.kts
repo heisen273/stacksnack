@@ -4,7 +4,7 @@ tasks.patchPluginXml {
     untilBuild.set("252.*")
 }
 group = "com.stackframehider"
-version = "1.0.91"
+version = "1.0.92"
 
 plugins {
     id("org.jetbrains.intellij") version "1.17.3"
