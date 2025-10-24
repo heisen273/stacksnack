@@ -419,13 +419,14 @@ class DebugSessionListener(private val project: Project) : Disposable {
     }
 
     private fun restoreSelection(component: JBList<*>, projectFrames: List<XStackFrame>) {
-//        val currentFrame = currentSession?.currentStackFrame ?: return
-//        val index = projectFrames.indexOfFirst { it == currentFrame }
+        val currentFrame = currentSession?.currentStackFrame ?: return
+        val index = projectFrames.indexOfFirst { it == currentFrame }
 
-//        if (index >= 0) {
-        component.selectedIndex = currentFramePosition
-        component.ensureIndexIsVisible(currentFramePosition)
-//        }
+        if (index >= 0) {
+//            currentFramePosition = index
+            component.selectedIndex = index
+            component.ensureIndexIsVisible(index)
+        }
     }
 
     /**
