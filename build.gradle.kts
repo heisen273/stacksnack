@@ -4,7 +4,7 @@ tasks.patchPluginXml {
     untilBuild.set("252.*")
 }
 group = "com.stackframehider"
-version = "1.0.93"
+version = "1.0.94"
 
 plugins {
     id("org.jetbrains.intellij") version "1.17.3"
@@ -35,6 +35,11 @@ intellij {
     // GoLand//
      localPath.set("/Applications/GoLand.app/Contents")
      type.set("GO")
+
+//    // IntelliJ IDEA Community
+//     localPath.set("/Applications/IntelliJ IDEA CE.app/Contents")
+//     type.set("IC")
+//    version.set("2023.2")
 
     // Don't specify plugins for now - let's use what's available
 //     plugins.set(listOf("python"))
