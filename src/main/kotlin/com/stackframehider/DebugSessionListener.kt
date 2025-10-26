@@ -7,9 +7,9 @@ import com.intellij.openapi.diagnostic.Logger
 import java.awt.Color
 import com.intellij.openapi.components.Service
 import com.intellij.xdebugger.frame.XStackFrame
+
 import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.openapi.wm.ToolWindowId
-import com.intellij.ui.ColoredTextContainer
 import com.intellij.ui.content.ContentManagerEvent
 import com.intellij.ui.content.ContentManagerListener
 import com.intellij.ui.components.JBList
@@ -22,7 +22,10 @@ import com.intellij.openapi.wm.ToolWindow
 import javax.swing.JList
 import javax.swing.ListCellRenderer
 import com.intellij.ui.SimpleColoredComponent
+import com.intellij.ui.SimpleTextAttributes
 import javax.swing.UIManager
+import javax.swing.event.ListDataListener
+import javax.swing.event.ListDataEvent
 
 
 @Service(Service.Level.PROJECT)
@@ -47,7 +50,11 @@ class DebugSessionListener(private val project: Project) : Disposable {
     private val updateAlarm = Alarm(Alarm.ThreadToUse.SWING_THREAD, this)
     private val updateDelayMs = 10
 
-    private var currentFramePosition = 0
+    // Continuous monitoring for async frame additions (IDEs like IntelliJ adding frames asynchronously)
+    private var modelListener: ListDataListener? = null
+    private var activelySyncing = false
+    private val syncAlarm = Alarm(Alarm.ThreadToUse.SWING_THREAD, this)
+    private var lastFilteredModelSize = 0
 
     private var contentManagerListener: ContentManagerListener? = null
 
@@ -100,45 +107,44 @@ class DebugSessionListener(private val project: Project) : Disposable {
             override fun sessionPaused() {
                 logger.warn("Session paused")
                 currentSession = session
-                // Clear cache on pause - frames list is rebuilt
-                framesComponentRef = null
-                originalRenderer = null
-                retryCount = 0
-                // Schedule update with delay to let UI render
+                clearComponentCache()
                 scheduleUpdate(updateDelayMs)
             }
 
             override fun stackFrameChanged() {
-                // Only update if not our hidden frame
-                if (session.currentStackFrame !is HiddenStackFrame) {
-                    logger.warn("Stack frame changed")
-                    scheduleUpdate(updateDelayMs)
+                if (session.currentStackFrame is HiddenStackFrame){
+                    return
                 }
+                logger.warn("Stack frame changed")
+                clearComponentCache()
+                scheduleUpdate(updateDelayMs)
+
             }
 
             override fun settingsChanged() {
                 logger.warn("Settings changed")
-                framesComponentRef = null
-                originalRenderer = null
-                retryCount = 0
+                clearComponentCache()
                 scheduleUpdate(updateDelayMs)
             }
 
             override fun sessionResumed() {
                 logger.warn("Session resumed")
-                framesComponentRef = null
-                originalRenderer = null
-                retryCount = 0
+                clearComponentCache()
             }
 
             override fun sessionStopped() {
                 logger.warn("Session stopped")
-                framesComponentRef = null
-                originalRenderer = null
+                clearComponentCache()
                 currentSession = null
-                retryCount = 0
             }
         })
+    }
+
+    private fun clearComponentCache() {
+        detachModelListener()
+        framesComponentRef = null
+        originalRenderer = null
+        retryCount = 0
     }
 
     private fun setupContentManagerListener() {
@@ -232,7 +238,7 @@ class DebugSessionListener(private val project: Project) : Disposable {
             val activeSession = XDebuggerManager.getInstance(project).currentSession
             if (activeSession == null) {
                 logger.warn("No active debug session")
-                retryCount = 0  // Reset on no session
+                retryCount = 0
                 return
             }
             currentSession = activeSession
@@ -256,7 +262,7 @@ class DebugSessionListener(private val project: Project) : Disposable {
                 logger.warn("Attempting to use cached component")
                 if (updateFramesComponent(cachedComponent)) {
                     logger.warn("Successfully updated cached component")
-                    retryCount = 0  // Reset on success
+                    retryCount = 0
                     return
                 } else {
                     logger.warn("Cached component update failed, clearing cache")
@@ -284,6 +290,98 @@ class DebugSessionListener(private val project: Project) : Disposable {
         } finally {
             isUpdating = false
         }
+    }
+
+    /**
+     * Attach continuous listener that re-filters as IntelliJ asynchronously adds frames
+     * This handles IntelliJ IDEA's behavior of adding frames to the list over time (up to ~1 second)
+     */
+    private fun attachContinuousModelListener(component: JBList<*>) {
+        // Remove old listener if exists
+        modelListener?.let { component.model.removeListDataListener(it) }
+
+        lastFilteredModelSize = 0
+        activelySyncing = true
+
+        modelListener = object : ListDataListener {
+            override fun intervalAdded(e: ListDataEvent) {
+                val newSize = component.model.size
+                logger.warn("Frames added: ${e.index0} to ${e.index1}, total size: $newSize")
+
+                // Only re-filter if we've actually seen new frames since last filter
+                if (newSize != lastFilteredModelSize) {
+                    // Debounce - wait for burst of additions to complete
+                    syncAlarm.cancelAllRequests()
+                    syncAlarm.addRequest({
+                        reapplyFilter(component)
+                    }, updateDelayMs) // Wait after last addition before re-filtering
+                }
+            }
+
+            override fun intervalRemoved(e: ListDataEvent) {
+                // Don't need to do anything - our filtering handles this
+                logger.warn("Frames removed")
+            }
+
+            override fun contentsChanged(e: ListDataEvent) {
+                logger.warn("List contents changed")
+                syncAlarm.cancelAllRequests()
+                syncAlarm.addRequest({
+                    reapplyFilter(component)
+                }, updateDelayMs)
+            }
+        }
+
+        component.model.addListDataListener(modelListener!!)
+
+        // Do initial filter
+        reapplyFilter(component)
+    }
+
+    /**
+     * Re-apply filter if the underlying model has new unfiltered frames
+     */
+    private fun reapplyFilter(component: JBList<*>) {
+        // Early exit if not actively syncing or project disposed
+        if (!activelySyncing || project.isDisposed) {
+            return
+        }
+
+        // Early exit if model size unchanged
+        val currentModelSize = component.model.size
+        if (currentModelSize == lastFilteredModelSize) {
+            logger.warn("Model size unchanged ($currentModelSize), no re-filter needed")
+            return
+        }
+
+        // Model grew since last filter
+        logger.warn("Model size changed: $lastFilteredModelSize -> $currentModelSize, re-filtering")
+
+        // Temporarily detach listener to avoid triggering during our modification
+        modelListener?.let { component.model.removeListDataListener(it) }
+
+        val success = updateFramesComponent(component)
+
+        if (success) {
+            lastFilteredModelSize = component.model.size
+            logger.warn("Re-filter successful, new filtered size: $lastFilteredModelSize")
+        }
+
+        // Re-attach listener
+        modelListener?.let { component.model.addListDataListener(it) }
+    }
+
+    /**
+     * Stop monitoring when session changes
+     */
+    private fun detachModelListener() {
+        framesComponentRef?.get()?.let { component ->
+            modelListener?.let { component.model.removeListDataListener(it) }
+        }
+        modelListener = null
+        activelySyncing = false
+        lastFilteredModelSize = 0
+        syncAlarm.cancelAllRequests()
     }
 
     /**
@@ -318,15 +416,14 @@ class DebugSessionListener(private val project: Project) : Disposable {
                 }
 
                 // For hidden frames, render with consistent styling
-
                 val comp = SimpleColoredComponent()
 
                 // Use slightly lighter gray for text when selected for contrast
                 val textColor = if (isSelected) Color(140, 140, 140) else Color(120, 120, 120)
                 comp.append(
                     value.getText(),
-                    com.intellij.ui.SimpleTextAttributes(
-                        com.intellij.ui.SimpleTextAttributes.STYLE_PLAIN,
+                    SimpleTextAttributes(
+                        SimpleTextAttributes.STYLE_PLAIN,
                         textColor
                     )
                 )
@@ -447,7 +544,9 @@ class DebugSessionListener(private val project: Project) : Disposable {
             framesComponentRef = WeakReference(component)
             logger.warn("Found and cached frames component")
 
-            return updateFramesComponent(component)
+            // Attach listener that will keep re-filtering as frames arrive asynchronously
+            attachContinuousModelListener(component)
+            return true
         }
 
         // Recursively search children
@@ -485,6 +584,9 @@ class DebugSessionListener(private val project: Project) : Disposable {
 
     override fun dispose() {
         updateAlarm.cancelAllRequests()
+        syncAlarm.cancelAllRequests()
+
+        detachModelListener()
 
         val toolWindow = ToolWindowManager.getInstance(project).getToolWindow(ToolWindowId.DEBUG)
         contentManagerListener?.let {
@@ -508,14 +610,6 @@ private class HiddenStackFrame(private val count: Int) : XStackFrame() {
     override fun getEvaluator() = null
     override fun getSourcePosition() = null
     override fun getEqualityObject() = null
-
-    override fun customizePresentation(component: ColoredTextContainer) {
-        val fadedGrey = com.intellij.ui.SimpleTextAttributes(
-            com.intellij.ui.SimpleTextAttributes.STYLE_PLAIN,
-            Color(120, 120, 120)
-        )
-        component.append(getText(), fadedGrey)
-    }
 
     fun getText(): String = "     $count hidden frame" + if (count > 1) "s" else ""
 }
