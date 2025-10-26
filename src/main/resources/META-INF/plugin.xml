@@ -40,10 +40,8 @@
 
     <change-notes><![CDATA[
         <ul>
-            <li>Highlight styling improved</li>
-            <li>Performance improvements</li>
-            <li>Fix frame navigation</li>
-            <li>Minor bug fixes</li>
+            <li>Fix frame hiding in IDEs that render frames asynchronously(IntelliJ IDEA, ...)</li>
+            <li>Performance improvements & bug fixes</li>
         </ul>
     ]]></change-notes>
 
