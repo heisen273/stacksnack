@@ -9,25 +9,6 @@ import java.io.File
 class StackFrameFilter {
     private val logger = Logger.getInstance(StackFrameFilter::class.java)
 
-    // For manual filtering when the automatic filter doesn't work
-    fun filterFrames(frames: List<XStackFrame>, project: Project?): List<XStackFrame> {
-        if (project == null || project.isDisposed) return frames
-
-        val filteredFrames = mutableListOf<XStackFrame>()
-
-        frames.forEach { frame ->
-            if (isProjectFrame(frame, project)) {
-                filteredFrames.add(frame)
-                logger.warn("StackFrameFilter: Keeping project frame: ${getFrameDescription(frame)}")
-            } else {
-                logger.warn("StackFrameFilter: Skipping library frame: ${getFrameDescription(frame)}")
-            }
-        }
-
-        logger.warn("StackFrameFilter: Filtered ${frames.size} frames to ${filteredFrames.size} project frames")
-        return filteredFrames
-    }
-
     fun isProjectFrame(frame: XStackFrame?, project: Project): Boolean {
         if (frame == null) return false
         val projectBasePath = project.basePath ?: return true
