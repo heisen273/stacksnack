@@ -40,7 +40,9 @@
 
     <change-notes><![CDATA[
         <ul>
-            <li>Fix frame hiding in IDEs that render frames asynchronously(IntelliJ IDEA, ...)</li>
+            <li>Added settings page for customizing library patterns</li>
+            <li>Added right-click action to hide frames from specific libraries</li>
+            <li>Improved pattern matching with user-configurable patterns</li>
             <li>Performance improvements & bug fixes</li>
         </ul>
     ]]></change-notes>
@@ -54,19 +56,31 @@
         <postStartupActivity implementation="com.stackframehider.DebugSessionStartupActivity"/>
 
         <!-- Settings service -->
-        <applicationService serviceImplementation="com.stackframehider.StackFrameHiderSettings"/>
+        <applicationService serviceImplementation="com.stackframehider.settings.StackFrameHiderSettings"/>
 
-        <!-- Project-level service for debug session handling -->
-<!--        <projectService serviceImplementation="com.stackframehider.DebugSessionListener"/>-->
+        <!-- Settings page -->
+        <applicationConfigurable
+            parentId="tools"
+            instance="com.stackframehider.settings.StackFrameHiderConfigurable"
+            id="com.stackframehider.settings.StackFrameHiderConfigurable"
+            displayName="StackSnack"/>
     </extensions>
 
     <actions>
         <action id="HideLibraryStackFrames"
-                class="com.stackframehider.StackFrameHiderAction"
+                class="com.stackframehider.actions.ToggleStackFrameHiderAction"
                 icon="/icons/ideIcon.svg"
                 text="Hide Library Stack Frames"
                 description="Hide library stack frames in debugger">
-        <add-to-group group-id="XDebugger.ToolWindow.TopToolbar" anchor="last"/>
+            <add-to-group group-id="XDebugger.ToolWindow.TopToolbar" anchor="last"/>
+        </action>
+
+        <action id="HideLibraryFromFrame"
+                class="com.stackframehider.actions.HideFrameFromLibraryAction"
+                icon="/icons/ideIcon.svg"
+                text="Hide Frames from This Library"
+                description="Add this library to the hide list">
+            <add-to-group group-id="XDebugger.Frames.Tree.Popup" anchor="last"/>
         </action>
     </actions>
 </idea-plugin>

@@ -23,6 +23,7 @@ import javax.swing.JList
 import javax.swing.ListCellRenderer
 import com.intellij.ui.SimpleColoredComponent
 import com.intellij.ui.SimpleTextAttributes
+import com.stackframehider.settings.StackFrameHiderSettings
 import javax.swing.UIManager
 import javax.swing.event.ListDataListener
 import javax.swing.event.ListDataEvent
@@ -604,7 +605,7 @@ class DebugSessionListener(private val project: Project) : Disposable {
     }
 }
 
-private class HiddenStackFrame(private val count: Int) : XStackFrame() {
+class HiddenStackFrame(private val count: Int) : XStackFrame() {
     var myCount = count
 
     override fun getEvaluator() = null

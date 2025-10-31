@@ -1,4 +1,5 @@
-package com.stackframehider
+// Description: Toggle action to enable/disable hiding of library stack frames in the debugger.
+package com.stackframehider.actions
 
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnActionEvent
@@ -7,11 +8,13 @@ import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.xdebugger.XDebuggerManager
 import com.intellij.openapi.util.IconLoader
+import com.stackframehider.DebugSessionListener
+import com.stackframehider.settings.StackFrameHiderSettings
 
-class StackFrameHiderAction : ToggleAction("Hide Library Stack Frames", "Toggle library stack frame visibility",
-    IconLoader.getIcon("/icons/ideIcon@20x20.svg", StackFrameHiderAction::class.java)) {
+class ToggleStackFrameHiderAction : ToggleAction("Hide Library Stack Frames", "Toggle library stack frame visibility",
+    IconLoader.getIcon("/icons/ideIcon@20x20.svg", ToggleStackFrameHiderAction::class.java)) {
 
-    private val logger = Logger.getInstance(StackFrameHiderAction::class.java)
+    private val logger = Logger.getInstance(ToggleStackFrameHiderAction::class.java)
 
     override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
 
